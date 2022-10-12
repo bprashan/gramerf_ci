@@ -1,0 +1,63 @@
+def g_gramerf_lib
+def g_nodelabel
+
+pipeline {
+    agent any
+    stages {
+        stage('setup') {
+            agent {
+                label 'graphene_icl_sdp_02'
+            }
+            environment {
+                GRAMERF_GROOVY_LIB='ci/lib/gramerf-groovy-lib.groovy'
+            }
+            steps {
+                script {
+                    checkout scm
+                    echo "Loading groovy library: ${env.GRAMERF_GROOVY_LIB}"
+                    g_gramerf_lib = load(env.GRAMERF_GROOVY_LIB)
+                    g_nodelabel = g_gramerf_lib.getNodeName()
+                    if (g_gramerf_lib.restartNode(g_nodelabel)){
+                        echo "restarted $g_nodelabel successfully..."
+                    } else {
+                        error "Able to restart the execution node $g_nodelabel ..."
+                    }
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                }
+            }
+        }
+        stage('run performance benchmarking'){
+            agent {
+                label g_nodelabel
+            }
+            steps {
+                script {
+                    checkout scm
+                    echo "perf_config ------------ $env.perf_config"
+                    echo "Build gramine from ----------- $env.BUILD_GRAMINE"
+                    echo "Gramine repo commit id --------------$env.GRAMINE_REPO_COMMIT_ID"
+                    echo "selected marker ----------- $env.run"
+                    echo "run specific test ----------- $env.run_specific_perf_test"
+                    echo "execution mode ------------- $env.exec_mode"
+                    echo "number of iterations ---------$env.iterations"
+                    if (!run_specific_perf_test?.trim()){
+                        echo " selected marker $env.run will be executed"
+                        echo "python3 -m pytest -s -v -m $env.run --ignore=gramine --disable-warnings --perf_config=${perf_config}"
+                    } else {
+                        echo " specific performance test $env.run_specific_perf_test will be executed"
+                        echo "python3 -m pytest -s -v $env.run_specific_perf_test --ignore=gramine --disable-warnings --perf_config=${perf_config}"
+                    }
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                }
+            }
+        }
+    }
+}
